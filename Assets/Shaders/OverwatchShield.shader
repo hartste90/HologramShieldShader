@@ -2,18 +2,25 @@
 {
 	Properties
 	{
-		
+		_Color("Color", COLOR) = (1.0,0.5,0.0,0.5)
 	}
 	SubShader
 	{
+
 		Pass
 		{
+			Cull Off
+			Tags {"RenderType" = "Transparent" "Queue" = "Transparent"}
+			Blend SrcAlpha One
+
 			HLSLPROGRAM
 
 			#pragma vertex vert
 			#pragma fragment frag
 			
 			#include "UnityCG.cginc"
+
+			float4 _Color;
 
 			struct appdata
 			{
@@ -35,8 +42,10 @@
 			fixed4 frag (v2f i) : SV_Target
 			{
 				//final output
-				return fixed4(1.0f,0.5f,0.0f,1.0f);
+				return _Color;
+
 			}
+			
 
 			ENDHLSL
 		}
