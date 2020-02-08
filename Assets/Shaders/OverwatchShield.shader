@@ -17,6 +17,8 @@
 		_EdgeTex("Edge Texture", 2D) = "white" {}
 		_EdgeIntensity("Edge Intensity", float) = 10.0
 		_EdgeExponent("Edge Falloff Exponent", float) = 6.0
+		_IntersectIntensity("Intersection Intensity", float) = 10.0
+		_IntersectExponent("Intersection Falloff Exponent", float) = 6.0
 
 
 
@@ -58,6 +60,10 @@
 			float _EdgeIntensity;
 			float _EdgeExponent;
 
+			sampler2D _CameraDepthNormalsTexture;	// depth texture
+			float _IntersectIntensity;
+			float _IntersectExponent;
+
 			struct appdata
 			{
 				float4 vertex : POSITION;
@@ -69,6 +75,8 @@
 				float4 vertex : SV_POSITION;
 				float2 uv : TEXCOORD0;
 				float4 vertexObjPos : TEXCOORD1;
+				float4 screenPos : TEXCOORD2;
+    			float depth : TEXCOORD3;
 			};
 
 			v2f vert (appdata v)
@@ -77,11 +85,14 @@
 				o.vertex = UnityObjectToClipPos(v.vertex);
 				o.uv = TRANSFORM_TEX(v.uv, _PulseTex);
 				o.vertexObjPos = v.vertex;
+				o.screenPos = ComputeScreenPos(o.vertex);
+				o.depth = -mul(UNITY_MATRIX_MV, v.vertex).z * _ProjectionParams.w;
 				return o;
 			}
 			
 			fixed4 frag (v2f i) : SV_Target
 			{
+				//hexagons
 				fixed4 pulseTex = tex2D(_PulseTex, i.uv);
 				fixed4 hexEdgeTex = tex2D(_HexEdgeTex, i.uv);
 				fixed4 edgeTex = tex2D(_EdgeTex, i.uv);
@@ -89,17 +100,24 @@
 				float verticalDist = abs(i.vertexObjPos.z);
     			fixed4 pulseTerm = pulseTex * _Color * _PulseIntensity * abs(sin(_Time.y * _PulseTimeScale - horizontalDist * _PulsePosScale + pulseTex.r * _PulseTexOffsetScale));
 
+				//in-between hexagons
 				fixed4 hexEdgeTerm = hexEdgeTex * _HexEdgeColor * _HexEdgeIntensity *
-    max(sin((horizontalDist + verticalDist) * _HexEdgePosScale - _Time.y * _HexEdgeTimeScale) - _HexEdgeWidthModifier, 0.0f) *
-    (1 / (1 - _HexEdgeWidthModifier));
+					max(sin((horizontalDist + verticalDist) * _HexEdgePosScale - _Time.y * _HexEdgeTimeScale) - _HexEdgeWidthModifier, 0.0f) *
+					(1 / (1 - _HexEdgeWidthModifier));
 
+				//glowing edge
     			fixed4 edgeTerm = pow(edgeTex.a, _EdgeExponent) * _Color * _EdgeIntensity;
 
+				//glowing intersection w/ other objects
+				// float diff = tex2D(_CameraDepthNormalsTexture, i.screenPos.xy).r - i.depth;
+				float worldDepth = DecodeFloatRG(tex2D(_CameraDepthNormalsTexture, i.screenPos.xy / i.screenPos.w).zw);
+				float diff = worldDepth - i.depth;
+				
+				float intersectGradient = 1 - min(diff / _ProjectionParams.w, 1.0f);
+				fixed4 intersectTerm = _Color * pow(intersectGradient, _IntersectExponent) * _IntersectIntensity;
+
 				//final output
-				return fixed4(_Color.rgb + pulseTerm.rgb + hexEdgeTerm.rgb + edgeTerm.rgb, _Color.a);
-
-
-
+				return fixed4(_Color.rgb + pulseTerm.rgb + hexEdgeTerm.rgb + edgeTerm + intersectTerm, _Color.a);
 			}
 			
 
